@@ -24,6 +24,27 @@
 # v - TrackingFloat(5), results in TrackingFloat(-1, 5)
 # TrackingFloat(4, 5) - TrackingFloat(1, 3), results in TrackingFloat(3, 5)
 
+mutable struct TrackingFloat <: AbstractFloat
+    value::Int64
+    memory::Int64 = -1000000
+
+    function Base.:+(x::TrackingFloat, y::TrackingFloat)
+        z = TrackingFloat(x.memory, y.memory)
+        new(x.value + y.value, z.memory)
+    end
+
+    function TrackingFloat(x, y)
+        absx = abs(x)
+        if absx > y
+            y = absx
+        end
+        new(x, y)
+    end
+end
+
+v = TrackingFloat(4, 3)
+v + TrackingFloat(3, 1)
+v + TrackingFloat(10)
 ##################### Specification Part 2:
 # It should work with operations such as +, -, *, /
 # For +, -, * the output should be as described above.
@@ -39,6 +60,7 @@
 # Note:
 # Don't forget to `import Base: +, *, -, /`
 # before trying to add methods to these functions
+
 
 
 ##################### Specification Part 2:
@@ -63,7 +85,7 @@
 
 #################### Part 1 simple operations
 # Test your type
-using Test
+using Testv
 v = TrackingFloat(1.0) + TrackingFloat(3.0) # We expect TrackingFloat(4, 3)
 @test v     == TrackingFloat(4,3)           # which we test using the macro @test
 @test v*v   == TrackingFloat(16, 4)
