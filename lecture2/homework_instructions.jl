@@ -24,27 +24,104 @@
 # v - TrackingFloat(5), results in TrackingFloat(-1, 5)
 # TrackingFloat(4, 5) - TrackingFloat(1, 3), results in TrackingFloat(3, 5)
 
-mutable struct TrackingFloat <: AbstractFloat
-    value::Int64
-    memory::Int64 = -1000000
+struct TrackingFloat <: AbstractFloat
+    value
+    memory
 
-    function Base.:+(x::TrackingFloat, y::TrackingFloat)
-        z = TrackingFloat(x.memory, y.memory)
-        new(x.value + y.value, z.memory)
+    function TrackingFloat(x)
+        absx = abs(x)
+        if typeof(x) == Float64
+            return new(x, 0.0)
+        end
+        new(x, absx)
     end
 
     function TrackingFloat(x, y)
-        absx = abs(x)
-        if absx > y
-            y = absx
-        end
         new(x, y)
     end
 end
 
-v = TrackingFloat(4, 3)
-v + TrackingFloat(3, 1)
-v + TrackingFloat(10)
+function promote_rule(a::TrackingFloat, b::Real)
+    a, TrackingFloat(b, typeof(b)(0))
+end
+
+function promote_rule(a::TrackingFloat, b::TrackingFloat)
+    a, b
+end
+
+function Base.:+(a::TrackingFloat, b::Real)
+    newa, newb = promote_rule(a, b)
+    newa+newb
+end
+
+function Base.:+(a::TrackingFloat, b::TrackingFloat)
+    newvalue = a.value + b.value
+    newmemory = getmemory(a, b)
+    valuetype = getnumtype(newvalue)
+    memorytype = getnumtype(newmemory)
+    TrackingFloat(valuetype(newvalue), memorytype(newmemory))
+end
+
+function Base.:-(a::TrackingFloat, b::TrackingFloat)
+    newb = TrackingFloat(-b.value, b.memory)
+    a+newb
+end
+
+function getnumtype(x)
+    if (x - floor(x)) < 1e-9
+        return Int64
+    else
+        return Float64
+    end
+end
+
+function Base.:*(a::TrackingFloat, b::TrackingFloat)
+    newvalue = a.value * b.value
+    newmemory = getmemory(a, b)
+    valuetype = getnumtype(newvalue)
+    memorytype = getnumtype(newmemory)
+    TrackingFloat(valuetype(newvalue), memorytype(newmemory))
+end
+
+function Base.:/(a::TrackingFloat, b::TrackingFloat)
+    if 1/b.value > b.memory
+        newb = TrackingFloat(1/b.value)
+    else
+        newb = TrackingFloat(1/b.value, b.memory)
+    end
+    newvalue = a.value * newb.value
+    newmemory = getmemory(a, newb)
+    valuetype = getnumtype(newvalue)
+    memorytype = getnumtype(newmemory)
+    TrackingFloat(valuetype(newvalue), memorytype(newmemory))
+end
+
+function value(a::TrackingFloat)
+    a.value
+end
+
+function getmax(a::TrackingFloat)
+    a.memory
+end
+
+function getmemory(a::TrackingFloat, b::TrackingFloat)
+    absavalue = abs(a.value)
+    absbvalue = abs(b.value)
+    max(absavalue, absbvalue, a.memory, b.memory)
+end
+
+TrackingFloat(10, 1)
+v = TrackingFloat(1) + TrackingFloat(3)
+v + TrackingFloat(2)
+v + TrackingFloat(5)
+v + TrackingFloat(-5)
+v - TrackingFloat(5)
+TrackingFloat(4, 5) - TrackingFloat(1, 3)
+TrackingFloat(3.0)/TrackingFloat(0.1)
+# 1. What you mean by having a single input argument, i.e., TrackingFloat(1)?
+# 2. Why the output is in integer while the value field is Float64?
+#
+
 ##################### Specification Part 2:
 # It should work with operations such as +, -, *, /
 # For +, -, * the output should be as described above.
@@ -85,7 +162,7 @@ v + TrackingFloat(10)
 
 #################### Part 1 simple operations
 # Test your type
-using Testv
+using Test
 v = TrackingFloat(1.0) + TrackingFloat(3.0) # We expect TrackingFloat(4, 3)
 @test v     == TrackingFloat(4,3)           # which we test using the macro @test
 @test v*v   == TrackingFloat(16, 4)
@@ -103,6 +180,7 @@ bt = TrackingFloat.(b)
 # Try some operations
 v = A*b
 vt = At*bt
+v-value.(vt)
 # Did we calculate correctly? Using value to convert back to float
 @test maximum(abs, v - value.(vt)) < sqrt(eps())
 
@@ -115,6 +193,7 @@ getmax.(vt)
 using LinearAlgebra
 
 # Is promotion working?
+TrackingFloat(1.0, 0) + 2.0
 @test TrackingFloat(1.0, 0) + 2.0 == TrackingFloat(3, 2)
 
 # Create Positive definite matrix
